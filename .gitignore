@@ -1,0 +1,12 @@
+# virtualenv
+.env/
+
+# Mac OS X
+.DS_Store
+
+# Python
+*.pyc
+
+# IDEA
+.idea/
+*.iml
