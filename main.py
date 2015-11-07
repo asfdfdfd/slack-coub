@@ -2,7 +2,7 @@
 
 from tornado.gen import coroutine
 from tornado.ioloop import IOLoop
-from tornado.httpclient import AsyncHTTPClient
+from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from tornado.httpserver import HTTPServer
 from tornado.httputil import url_concat
 from tornado.web import Application, RequestHandler
@@ -12,14 +12,29 @@ import random
 
 class CoubRandomHandler(RequestHandler):
     
+    def initialize(self):
+        self.timeout_expired = False
+    
     def coub_url(self, query, order_by, page):
         return url_concat('https://coub.com/api/v2/search/coubs', {'q': query, 'order_by': order_by, 'page': page})
-            
+
+    def callback_timeout(self):
+        self.timeout_expired = True
+
+        self.write({
+            'response_type': 'in_channel'
+        })
+        
+        self.finish()
+                
     @coroutine
     def get(self):                        
         query = self.get_argument('text')
         order_by = self.get_argument('order_by', 'oldest')
-        
+        response_url = self.get_argument('response_url')
+
+        handle_timeout = IOLoop.instance().call_at(IOLoop.instance().time() + 2, self.callback_timeout)
+ 
         http_client = AsyncHTTPClient()
         
         response = yield http_client.fetch(self.coub_url(query, order_by, 1))
@@ -37,7 +52,7 @@ class CoubRandomHandler(RequestHandler):
             
             coub = random.choice(response_body['coubs'])
 
-            self.write({
+            response_body = {
                 'response_type': 'in_channel',         
                 'attachments':[{
                     'fallback': coub['title'],
@@ -45,10 +60,36 @@ class CoubRandomHandler(RequestHandler):
                     'title_link': 'https://coub.com/view/%s' % coub["permalink"],
                     'image_url': coub["gif_versions"]["email"]
                 }]
-            })
+            }
+
+            IOLoop.instance().remove_timeout(handle_timeout)
+
+            if self.timeout_expired:
+                response_headers = {'Content-Type': 'application/json; charset=UTF-8'}
+            
+                request_response = HTTPRequest(url=response_url, method='POST', headers=response_headers, body=json.dumps(response_body))
+
+                yield http_client.fetch(request_response)
+            else:
+                self.write(response_body)
         else:
-            self.write('Could not find coub.')
-        
+            response_body = {
+                'text':'Could not find coub with query "%s"' % query
+            }
+            
+            IOLoop.instance().remove_timeout(handle_timeout)
+
+            if self.timeout_expired:                        
+                response_body['response_type'] = 'in_channel'
+                
+                response_headers = {'Content-Type': 'application/json; charset=UTF-8'}
+
+                request_response = HTTPRequest(url=response_url, method='POST', headers=response_headers, body=json.dumps(response_body))
+
+                yield http_client.fetch(request_response)
+            else:
+                self.write(response_body)
+            
 controllers = [
     (r'/api/v1/coub/random/?', CoubRandomHandler),
 ]
