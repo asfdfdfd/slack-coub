@@ -44,7 +44,7 @@ class CoubRandomHandler(RequestHandler):
         total_pages = response_body['total_pages']
         
         if total_pages > 0:
-            page_number = random.randint(1, response_body['total_pages'])
+            page_number = self.random_exponential(response_body['total_pages'])
                         
             response = yield http_client.fetch(self.coub_url(query, order_by, page_number))                        
                                 
@@ -90,6 +90,9 @@ class CoubRandomHandler(RequestHandler):
             else:
                 self.write(response_body)
             
+    def random_exponential(self, value_max):
+        return (random.expovariate(value_max / 10.0) * value_max) % value_max
+                    
 controllers = [
     (r'/api/v1/coub/random/?', CoubRandomHandler),
 ]
