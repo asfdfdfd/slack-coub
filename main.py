@@ -30,7 +30,7 @@ class CoubRandomHandler(RequestHandler):
     @coroutine
     def get(self):                        
         query = self.get_argument('text')
-        order_by = self.get_argument('order_by', 'oldest')
+        order_by = self.get_argument('order_by', 'likes_count')
         response_url = self.get_argument('response_url')
 
         handle_timeout = IOLoop.instance().call_at(IOLoop.instance().time() + 2, self.callback_timeout)
